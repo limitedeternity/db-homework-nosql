@@ -1,0 +1,54 @@
+version: '3.9'
+
+services:
+  redis:
+    image: bitnami/redis:7.2.3
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/bitnami/redis/data
+
+  mongodb:
+    image: bitnami/mongodb:7.0.4
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      - MONGODB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_DATABASE=mongodb
+      - MONGODB_USERNAME=mongodb
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+    volumes:
+      - mongodb-data:/bitnami/mongodb
+
+  kafka:
+    image: bitnami/kafka:3.6.1
+    restart: unless-stopped
+    ports:
+      - '9092:9092'
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    volumes:
+      - kafka-data:/bitnami
+
+volumes:
+  redis-data:
+    driver: local
+
+  mongodb-data:
+    driver: local
+
+  kafka-data:
+    driver: local
