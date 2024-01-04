@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+aiofiles = "==23.2.1"
+aiocsv = "==1.2.5"
+pymongo = "==4.6.1"
+motor = "==3.3.2"
+python-decouple = "==3.8"
+python-dateutil = "==2.8.2"
+typing-extensions = "==4.9.0"
+pydantic = "==2.5.3"
+tqdm = "==4.66.1"
+
+[dev-packages]
+python-lsp-server = {extras = ["pylint"], version = "*"}
+black = "==23.12.1"
+
+[requires]
+python_version = "3.8"
