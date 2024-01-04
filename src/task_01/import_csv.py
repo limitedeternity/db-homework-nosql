@@ -112,7 +112,7 @@ async def async_enumerate(sequence, start=0):
 
 
 @needs_motor
-async def import_csv(csv_path: Path) -> None:
+async def import_csv(csv_path: Path):
     client = acquire_motor()
     collection = client.mongodb.AllTrips
 
@@ -130,10 +130,24 @@ async def import_csv(csv_path: Path) -> None:
     print(f"{await collection.count_documents({})} documents processed")
 
 
-if __name__ == "__main__":
+@needs_motor
+async def index_collection():
+    client = acquire_motor()
+    collection = client.mongodb.AllTrips
+
+    await collection.create_index("tpep_pickup_datetime", background=True)
+    await collection.create_index("tpep_dropoff_datetime", background=True)
+
+
+async def main():
     csv_path = CTX["root_dir"] / "datasets" / "2018_Yellow_Taxi_Trip_Data_20231108.csv"
 
+    await import_csv(csv_path)
+    await index_collection()
+
+
+if __name__ == "__main__":
     if platform.system() == "Windows":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    asyncio.run(import_csv(csv_path))
+    asyncio.run(main())
