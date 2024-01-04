@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from contextvars import ContextVar
 from datetime import datetime
 import functools
@@ -10,11 +10,20 @@ from typing import Callable, Optional, TypedDict, TypeVar
 
 from aiocsv import AsyncDictReader
 import aiofiles
+from bson import ObjectId
 from dateutil.parser import parse as parse_datetime
 from decouple import Config, RepositoryEnv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.server_api import ServerApi
-from pydantic import BaseModel, NonNegativeInt, PlainValidator, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeInt,
+    PlainValidator,
+    StringConstraints,
+)
+
 from tqdm.asyncio import tqdm
 from typing_extensions import Annotated
 
@@ -41,7 +50,7 @@ CTX: GlobalContext = {
 
 def create_motor():
     env = Config(RepositoryEnv(CTX["root_dir"] / ".env"))
-    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@127.0.0.1:27017/?authSource=mongodb"
+    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb"
 
     return AsyncIOMotorClient(connect_uri, server_api=ServerApi("1"), connect=False)
 
@@ -63,7 +72,9 @@ def needs_motor(func):
         if CTX["motor_client"].get() is not None:
             return await func(*args, **kwargs)
 
-        with scoped_context_value(CTX["motor_client"], create_motor()):
+        with closing(create_motor()) as motor, scoped_context_value(
+            CTX["motor_client"], motor
+        ):
             return await func(*args, **kwargs)
 
     return wrapper
@@ -76,7 +87,9 @@ def acquire_motor():
 
 
 class TripData(BaseModel):
-    _id: NonNegativeInt
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    id: Annotated[ObjectId, Field(alias="_id")]
     VendorID: int
 
     tpep_pickup_datetime: Annotated[
@@ -111,23 +124,27 @@ async def async_enumerate(sequence, start=0):
         n += 1
 
 
+def create_oid(n: int, /) -> ObjectId:
+    return ObjectId(f"{n:x}".zfill(24))
+
+
 @needs_motor
 async def import_csv(csv_path: Path):
     client = acquire_motor()
     collection = client.mongodb.AllTrips
-
-    assert (await collection.delete_many({})).acknowledged
 
     async with aiofiles.open(csv_path, mode="r", encoding="utf-8", newline="") as csv:
         reader = AsyncDictReader(csv)
 
         with tqdm(async_enumerate(reader), unit=" rows") as it:
             async for index, row in it:
-                document = TripData(_id=index, **row)
+                document = TripData(_id=create_oid(index), **row)
 
-                assert (await collection.insert_one(document.model_dump())).acknowledged
+                assert (
+                    await collection.insert_one(document.model_dump(by_alias=True))
+                ).acknowledged
 
-    print(f"{await collection.count_documents({})} documents processed")
+    print(f"Total: {await collection.count_documents({})} documents")
 
 
 @needs_motor
@@ -139,9 +156,14 @@ async def index_collection():
     await collection.create_index("tpep_dropoff_datetime", background=True)
 
 
+@needs_motor
 async def main():
     csv_path = CTX["root_dir"] / "datasets" / "2018_Yellow_Taxi_Trip_Data_20231108.csv"
 
+    client = acquire_motor()
+    collection = client.mongodb.AllTrips
+
+    await collection.drop()
     await import_csv(csv_path)
     await index_collection()
 
