@@ -1,9 +1,11 @@
+from collections import OrderedDict
 import functools
 import operator
 from pathlib import Path
 from typing import Callable, TypedDict, TypeVar
 
 from decouple import Config, RepositoryEnv
+import pymongo
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
@@ -39,6 +41,7 @@ def main():
     (new_collection := client.mongodb.EventStream).drop()
 
     print(f"Performing aggregation on {collection.name} into {new_collection.name}")
+    sort_on = OrderedDict([("event_timestamp", pymongo.ASCENDING), ("trip_id", pymongo.ASCENDING)])
 
     collection.aggregate(
         [
@@ -91,15 +94,15 @@ def main():
             },
             {"$unwind": "$data"},
             {"$replaceRoot": {"newRoot": "$data"}},
-            {"$sort": {"event_timestamp": 1, "trip_id": 1}},
+            {"$sort": sort_on},
             {"$out": "EventStream"},
         ],
-        allowDiskUse=True
+        allowDiskUse=True,
     )
 
     print(f"Total: {new_collection.count_documents({})} documents")
 
-    new_collection.create_index("event_timestamp", background=True)
+    new_collection.create_index(list(sort_on.items()), background=True)
 
 
 if __name__ == "__main__":
