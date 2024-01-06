@@ -10,6 +10,8 @@ from typing import Callable, Optional, TypedDict, TypeVar
 
 from aiocsv import AsyncDictReader
 import aiofiles
+from asyncstdlib.builtins import enumerate as aenumerate, map as amap
+from asyncstdlib.itertools import batched as abatched
 from bson import ObjectId
 from dateutil.parser import parse as parse_datetime
 from decouple import Config, RepositoryEnv
@@ -50,7 +52,7 @@ CTX: GlobalContext = {
 
 def create_motor():
     env = Config(RepositoryEnv(CTX["root_dir"] / ".env"))
-    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb"
+    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb&directConnection=true"
 
     return AsyncIOMotorClient(connect_uri, server_api=ServerApi("1"), connect=False)
 
@@ -116,16 +118,22 @@ class TripData(BaseModel):
     total_amount: float
 
 
-async def async_enumerate(sequence, start=0):
-    n = start
-
-    async for elem in sequence:
-        yield n, elem
-        n += 1
-
-
 def create_oid(n: int, /) -> ObjectId:
     return ObjectId(f"{n:x}".zfill(24))
+
+
+def uncurry(func):
+    @functools.wraps(func)
+    def wrapper(args=None, kwargs=None):
+        if args is None:
+            args = ()
+
+        if kwargs is None:
+            kwargs = {}
+
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 @needs_motor
@@ -134,15 +142,25 @@ async def import_csv(csv_path: Path):
     collection = client.mongodb.AllTrips
 
     async with aiofiles.open(csv_path, mode="r", encoding="utf-8", newline="") as csv:
-        reader = AsyncDictReader(csv)
-
-        with tqdm(async_enumerate(reader), unit=" rows") as it:
-            async for index, row in it:
-                document = TripData(_id=create_oid(index), **row)
-
-                assert (
-                    await collection.insert_one(document.model_dump(by_alias=True))
-                ).acknowledged
+        with tqdm(
+            amap(
+                uncurry(
+                    lambda index, row: TripData(
+                        _id=create_oid(index), **row
+                    ).model_dump(by_alias=True)
+                ),
+                aenumerate(AsyncDictReader(csv)),
+            ),
+            unit=" rows",
+        ) as it:
+            async with await client.start_session() as session:
+                async for document_batch in abatched(it, 1024):
+                    async with session.start_transaction():
+                        assert (
+                            await collection.insert_many(
+                                document_batch, ordered=False, session=session
+                            )
+                        ).acknowledged
 
     print(f"Total: {await collection.count_documents({})} documents")
 
