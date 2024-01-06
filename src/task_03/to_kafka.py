@@ -47,6 +47,7 @@ def create_producer():
     return AIOKafkaProducer(
         bootstrap_servers="host.docker.internal:10000",
         transactional_id=str(uuid.uuid4()),
+        compression_type="snappy"
     )
 
 
