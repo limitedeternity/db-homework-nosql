@@ -7,6 +7,7 @@ services:
     ports:
       - '6379:6379'
     environment:
+      - REDIS_REPLICATION_MODE=master
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - redis-data:/bitnami/redis/data
@@ -17,10 +18,17 @@ services:
     ports:
       - '27017:27017'
     environment:
+      # General
+      - MONGODB_ROOT_USER=root
       - MONGODB_ROOT_PASSWORD=${MONGODB_PASSWORD}
       - MONGODB_DATABASE=mongodb
       - MONGODB_USERNAME=mongodb
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      # Replica Set
+      - MONGODB_ADVERTISED_HOSTNAME=host.docker.internal
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=rs0
     volumes:
       - mongodb-data:/bitnami/mongodb
 {% for number in range(KAFKA_CLUSTER_NODES) %}
