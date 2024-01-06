@@ -23,24 +23,26 @@ services:
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
     volumes:
       - mongodb-data:/bitnami/mongodb
-
-  kafka-0:
+{% for number in range(KAFKA_CLUSTER_NODES) %}
+  kafka-{{ number }}:
     image: bitnami/kafka:3.6.1
     restart: unless-stopped
     ports:
-      - '10000:9094'
+      - '1000{{ number }}:9094'
     environment:
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
       - KAFKA_CFG_AUTO_LEADER_REBALANCE_ENABLE=true
       # KRaft settings
-      - KAFKA_CFG_BROKER_ID=0
-      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_BROKER_ID={{ number }}
+      - KAFKA_CFG_NODE_ID={{ number }}
       - KAFKA_KRAFT_CLUSTER_ID=${KAFKA_KRAFT_CLUSTER_ID}
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka-0:9093,1@kafka-1:9093,2@kafka-2:9093
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=
+{%- set comma = joiner(",") %}
+{%- for n in range(KAFKA_CLUSTER_NODES) %}{{ comma() }}{{ "{0}@kafka-{0}:9093".format(n) }}{%- endfor %}
       - KAFKA_CFG_PROCESS_ROLES=controller,broker
       # Listeners
       - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-0:9092,EXTERNAL://host.docker.internal:10000
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-{{ number }}:9092,EXTERNAL://host.docker.internal:1000{{ number }}
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
@@ -51,66 +53,8 @@ services:
     networks:
       - kafka-net
     volumes:
-      - kafka-0:/bitnami
-
-  kafka-1:
-    image: bitnami/kafka:3.6.1
-    restart: unless-stopped
-    ports:
-      - '10001:9094'
-    environment:
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_AUTO_LEADER_REBALANCE_ENABLE=true
-      # KRaft settings
-      - KAFKA_CFG_BROKER_ID=1
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_KRAFT_CLUSTER_ID=${KAFKA_KRAFT_CLUSTER_ID}
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka-0:9093,1@kafka-1:9093,2@kafka-2:9093
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      # Listeners
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:9092,EXTERNAL://host.docker.internal:10001
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      # Clustering
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
-    networks:
-      - kafka-net
-    volumes:
-      - kafka-1:/bitnami
-
-  kafka-2:
-    image: bitnami/kafka:3.6.1
-    restart: unless-stopped
-    ports:
-      - '10002:9094'
-    environment:
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_AUTO_LEADER_REBALANCE_ENABLE=true
-      # KRaft settings
-      - KAFKA_CFG_BROKER_ID=2
-      - KAFKA_CFG_NODE_ID=2
-      - KAFKA_KRAFT_CLUSTER_ID=${KAFKA_KRAFT_CLUSTER_ID}
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka-0:9093,1@kafka-1:9093,2@kafka-2:9093
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      # Listeners
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:9092,EXTERNAL://host.docker.internal:10002
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      # Clustering
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
-    networks:
-      - kafka-net
-    volumes:
-      - kafka-2:/bitnami
-
+      - kafka-{{ number }}:/bitnami
+{% endfor %}
 volumes:
   redis-data:
     driver: local
