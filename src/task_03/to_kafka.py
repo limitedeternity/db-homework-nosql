@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
 import asyncio
-from collections import OrderedDict
 from contextlib import closing
 from datetime import timezone
 import functools
@@ -68,12 +67,10 @@ async def main(args):
 
         try:
             with tqdm(arepeat(1), unit=" docs") as it:
-                sort_on = OrderedDict(
-                    [
-                        ("event_timestamp", pymongo.ASCENDING),
-                        ("trip_id", pymongo.ASCENDING),
-                    ]
-                )
+                sort_on = [
+                    ("event_timestamp", pymongo.ASCENDING),
+                    ("trip_id", pymongo.ASCENDING),
+                ]
 
                 async with await client.start_session() as session:
                     async for _ in it:
@@ -81,7 +78,7 @@ async def main(args):
                             document = await collection.find_one_and_delete(
                                 {},
                                 projection={"_id": False},
-                                sort=list(sort_on.items()),
+                                sort=sort_on,
                             )
 
                             if not document:
