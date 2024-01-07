@@ -84,6 +84,7 @@ async def main(args):
                             if not document:
                                 break
 
+                            # https://aiokafka.readthedocs.io/en/stable/consumer.html#reading-transactional-messages
                             async with producer.transaction():
                                 await producer.send_and_wait(
                                     "nyc-taxi-events",
