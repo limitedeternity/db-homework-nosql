@@ -16,6 +16,7 @@ tqdm = "==4.66.1"
 jinja2 = "==3.1.2"
 aiokafka = {extras = ["snappy"], version = "==0.8.0"}
 asyncstdlib = "==3.12.0"
+codetiming = "==1.4.0"
 
 [dev-packages]
 python-lsp-server = {extras = ["pylint"], version = "*"}
