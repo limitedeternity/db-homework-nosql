@@ -31,7 +31,7 @@ CTX: GlobalContext = {
 
 def create_mongo():
     env = Config(RepositoryEnv(CTX["root_dir"] / ".env"))
-    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb"
+    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb&directConnection=true"
 
     return MongoClient(connect_uri, server_api=ServerApi("1"), connect=False)
 
@@ -103,7 +103,8 @@ def main():
             allowDiskUse=True,
         )
 
-        print(f"Total: {new_collection.count_documents({})} documents")
+        document_count = new_collection.count_documents({})
+        print(f"Total: {document_count} documents")
 
         new_collection.create_index(list(sort_on.items()), background=True)
 

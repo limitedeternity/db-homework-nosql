@@ -162,7 +162,9 @@ async def import_csv(csv_path: Path):
                             )
                         ).acknowledged
 
-    print(f"Total: {await collection.count_documents({})} documents")
+                document_count = await collection.count_documents({}, session=session)
+
+    print(f"Total: {document_count} documents")
 
 
 @needs_motor

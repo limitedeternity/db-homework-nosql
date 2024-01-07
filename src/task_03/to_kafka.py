@@ -38,7 +38,7 @@ CTX: GlobalContext = {
 
 def create_motor():
     env = Config(RepositoryEnv(CTX["root_dir"] / ".env"))
-    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb"
+    connect_uri = f"mongodb://mongodb:{env.get('MONGODB_PASSWORD')}@host.docker.internal:27017/?authSource=mongodb&directConnection=true"
 
     return AsyncIOMotorClient(connect_uri, server_api=ServerApi("1"), connect=False)
 
@@ -47,7 +47,7 @@ def create_producer():
     return AIOKafkaProducer(
         bootstrap_servers="host.docker.internal:10000",
         transactional_id=str(uuid.uuid4()),
-        compression_type="snappy"
+        compression_type="snappy",
     )
 
 
@@ -81,21 +81,27 @@ async def main(args):
                     ]
                 )
 
-                async for _ in it:
-                    document = await collection.find_one_and_delete(
-                        {}, projection={"_id": False}, sort=list(sort_on.items())
-                    )
+                async with await client.start_session() as session:
+                    async for _ in it:
+                        async with session.start_transaction():
+                            document = await collection.find_one_and_delete(
+                                {},
+                                projection={"_id": False},
+                                sort=list(sort_on.items()),
+                            )
 
-                    if not document:
-                        break
+                            if not document:
+                                break
 
-                    async with producer.transaction():
-                        await producer.send_and_wait(
-                            "nyc-taxi-events",
-                            key=document["trip_id"].binary,
-                            value=json_util.dumps(document).encode(),
-                            timestamp_ms=timestamp_ms(document["event_timestamp"]),
-                        )
+                            async with producer.transaction():
+                                await producer.send_and_wait(
+                                    "nyc-taxi-events",
+                                    key=document["trip_id"].binary,
+                                    value=json_util.dumps(document).encode(),
+                                    timestamp_ms=timestamp_ms(
+                                        document["event_timestamp"]
+                                    ),
+                                )
 
         finally:
             await producer.stop()
