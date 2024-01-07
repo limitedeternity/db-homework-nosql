@@ -6,10 +6,12 @@ from datetime import timezone
 import functools
 import operator
 from pathlib import Path
+import platform
 from typing import Callable, TypedDict, TypeVar
 import uuid
 
 from aiokafka import AIOKafkaProducer
+from asyncstdlib.itertools import _repeat as arepeat
 from bson import json_util
 from decouple import Config, RepositoryEnv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -51,14 +53,6 @@ def create_producer():
     )
 
 
-async def async_count(start: int = 0, step: int = 1):
-    n = start
-
-    while True:
-        yield n
-        n += step
-
-
 def timestamp_ms(dt):
     ts = dt.replace(tzinfo=timezone.utc).timestamp()
 
@@ -73,7 +67,7 @@ async def main(args):
         await producer.start()
 
         try:
-            with tqdm(async_count(), unit=" docs") as it:
+            with tqdm(arepeat(1), unit=" docs") as it:
                 sort_on = OrderedDict(
                     [
                         ("event_timestamp", pymongo.ASCENDING),
@@ -108,6 +102,9 @@ async def main(args):
 
 
 if __name__ == "__main__":
+    if platform.system() == "Windows":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     parser = ArgumentParser()
     parser.add_argument(
         "--collection", default="EventStream", help="Name of the collection"
