@@ -72,16 +72,10 @@ volumes:
 
   mongodb-data:
     driver: local
-
-  kafka-0:
+{% for number in range(KAFKA_CLUSTER_NODES) %}
+  kafka-{{ number }}:
     driver: local
-
-  kafka-1:
-    driver: local
-
-  kafka-2:
-    driver: local
-
+{% endfor %}
 networks:
   kafka-net:
     driver: bridge
