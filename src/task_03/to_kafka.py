@@ -79,6 +79,7 @@ async def main(args):
                                 {},
                                 projection={"_id": False},
                                 sort=sort_on,
+                                session=session,
                             )
 
                             if not document:
