@@ -10,6 +10,7 @@ from typing import Callable, Optional, TypedDict, TypeVar
 
 from aiocsv import AsyncDictReader
 import aiofiles
+from aiotools.taskgroup import TaskGroup
 from asyncstdlib.builtins import enumerate as aenumerate, map as amap
 from asyncstdlib.itertools import batched as abatched
 from bson import ObjectId
@@ -136,6 +137,10 @@ def uncurry(func):
     return wrapper
 
 
+async def complete(future):
+    return await future
+
+
 @needs_motor
 async def import_csv(csv_path: Path):
     client = acquire_motor()
@@ -154,13 +159,15 @@ async def import_csv(csv_path: Path):
             unit=" rows",
         ) as it:
             async with await client.start_session() as session:
-                async for document_batch in abatched(it, 1024):
-                    async with session.start_transaction():
-                        assert (
-                            await collection.insert_many(
-                                document_batch, ordered=False, session=session
+                async with TaskGroup() as tg:
+                    async for document_batch in abatched(it, 1024):
+                        tg.create_task(
+                            complete(
+                                collection.insert_many(
+                                    document_batch, ordered=False, session=session
+                                )
                             )
-                        ).acknowledged
+                        )
 
                 document_count = await collection.count_documents({}, session=session)
 
