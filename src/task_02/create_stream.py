@@ -42,73 +42,75 @@ def main():
         collection = client.mongodb.AllTrips
         (new_collection := client.mongodb.EventStream).drop()
 
-        with Timer(
-            initial_text=f"Performing aggregation on {collection.name} into {new_collection.name}"
-        ):
+        with client.start_session() as session:
             sort_on = OrderedDict(
                 [("event_timestamp", pymongo.ASCENDING), ("trip_id", pymongo.ASCENDING)]
             )
 
-            collection.aggregate(
-                [
-                    {
-                        "$match": {
-                            "$expr": {
-                                "$gte": [
+            with Timer(
+                initial_text=f"Aggregating {collection.name} into {new_collection.name}"
+            ):
+                collection.aggregate(
+                    [
+                        {
+                            "$match": {
+                                "$expr": {
+                                    "$gte": [
+                                        {
+                                            "$dateDiff": {
+                                                "startDate": "$tpep_pickup_datetime",
+                                                "endDate": "$tpep_dropoff_datetime",
+                                                "unit": "second",
+                                            }
+                                        },
+                                        60,
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$project": {
+                                "data": [
                                     {
-                                        "$dateDiff": {
-                                            "startDate": "$tpep_pickup_datetime",
-                                            "endDate": "$tpep_dropoff_datetime",
-                                            "unit": "second",
-                                        }
+                                        "trip_id": "$_id",
+                                        "event_type": "start",
+                                        "event_timestamp": "$tpep_pickup_datetime",
+                                        "VendorID": "$VendorID",
+                                        "PULocationID": "$PULocationID",
                                     },
-                                    60,
+                                    {
+                                        "trip_id": "$_id",
+                                        "event_type": "end",
+                                        "event_timestamp": "$tpep_dropoff_datetime",
+                                        "passenger_count": "$passenger_count",
+                                        "trip_distance": "$trip_distance",
+                                        "RatecodeID": "$RatecodeID",
+                                        "store_and_fwd_flag": "$store_and_fwd_flag",
+                                        "DOLocationID": "$DOLocationID",
+                                        "payment_type": "$payment_type",
+                                        "fare_amount": "$fare_amount",
+                                        "extra": "$extra",
+                                        "mta_tax": "$mta_tax",
+                                        "tip_amount": "$tip_amount",
+                                        "tolls_amount": "$tolls_amount",
+                                        "improvement_surcharge": "$improvement_surcharge",
+                                        "total_amount": "$total_amount",
+                                    },
                                 ]
                             }
-                        }
-                    },
-                    {
-                        "$project": {
-                            "data": [
-                                {
-                                    "trip_id": "$_id",
-                                    "event_type": "start",
-                                    "event_timestamp": "$tpep_pickup_datetime",
-                                    "VendorID": "$VendorID",
-                                    "PULocationID": "$PULocationID",
-                                },
-                                {
-                                    "trip_id": "$_id",
-                                    "event_type": "end",
-                                    "event_timestamp": "$tpep_dropoff_datetime",
-                                    "passenger_count": "$passenger_count",
-                                    "trip_distance": "$trip_distance",
-                                    "RatecodeID": "$RatecodeID",
-                                    "store_and_fwd_flag": "$store_and_fwd_flag",
-                                    "DOLocationID": "$DOLocationID",
-                                    "payment_type": "$payment_type",
-                                    "fare_amount": "$fare_amount",
-                                    "extra": "$extra",
-                                    "mta_tax": "$mta_tax",
-                                    "tip_amount": "$tip_amount",
-                                    "tolls_amount": "$tolls_amount",
-                                    "improvement_surcharge": "$improvement_surcharge",
-                                    "total_amount": "$total_amount",
-                                },
-                            ]
-                        }
-                    },
-                    {"$unwind": "$data"},
-                    {"$replaceRoot": {"newRoot": "$data"}},
-                    {"$sort": sort_on},
-                    {"$out": "EventStream"},
-                ],
-                allowDiskUse=True,
-            )
+                        },
+                        {"$unwind": "$data"},
+                        {"$replaceRoot": {"newRoot": "$data"}},
+                        {"$sort": sort_on},
+                        {"$out": "EventStream"},
+                    ],
+                    allowDiskUse=True,
+                    session=session,
+                )
 
-        document_count = new_collection.count_documents({})
+            document_count = new_collection.count_documents({}, session=session)
+
         print(f"Total: {document_count} documents")
-
         new_collection.create_index(list(sort_on.items()), background=True)
 
 
