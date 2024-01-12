@@ -7,7 +7,6 @@ import operator
 from pathlib import Path
 import platform
 from typing import Callable, TypedDict, TypeVar
-import uuid
 
 from aiokafka import AIOKafkaProducer
 from asyncstdlib.itertools import _repeat as arepeat
@@ -47,7 +46,7 @@ def create_motor():
 def create_producer():
     return AIOKafkaProducer(
         bootstrap_servers="host.docker.internal:10000",
-        transactional_id=str(uuid.uuid4()),
+        transactional_id=platform.node(),
         compression_type="snappy",
     )
 
